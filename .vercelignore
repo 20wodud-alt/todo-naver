@@ -1,5 +1,7 @@
 .git
 .vercel-auth
+supabase/.temp
+supabase/.branches
 .next
 node_modules
 data

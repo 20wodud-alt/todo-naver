@@ -6,7 +6,9 @@
 
 [열매담 카페](https://todo-naver.vercel.app)
 
-Vercel CLI로 배포되어 있습니다. 현재 배포 환경은 Supabase 연결 전이므로 화면을 확인할 수 있으며, 할 일 조회·저장은 데이터베이스 환경 변수 설정 후 사용할 수 있습니다. Vercel에서는 로컬 JSON 파일 저장으로 자동 전환하지 않습니다.
+Vercel CLI로 배포되어 있으며 Supabase 데이터베이스에 연결되어 있습니다. 할 일 등록·조회·수정·삭제가 `03_todo_naver_todos` 테이블에 반영됩니다. Vercel에서는 로컬 JSON 파일 저장으로 자동 전환하지 않습니다.
+
+[Supabase 프로젝트와 테이블 확인](https://supabase.com/dashboard/project/juxqgkygdsnhtwaemjkz/editor) · Supabase 프로젝트 `todo` · 앱 전용 테이블 `03_todo_naver_todos` · 리전 서울 (`ap-northeast-2`)
 
 ## 실행
 
@@ -45,17 +47,17 @@ Supabase URL과 서버 키가 설정되면 Next.js Route Handler가 Supabase의 
 
 ## Supabase 연결
 
-1. Supabase에 새 프로젝트 `03_todo_naver`를 만듭니다.
-2. 새 프로젝트의 SQL Editor에서 `supabase/migrations/202610230001_create_project_todos.sql`을 실행합니다. 테이블명에는 프로젝트명을 접두사로 사용합니다.
+1. Supabase에서 기존 `todo` 프로젝트를 선택합니다.
+2. SQL Editor에서 `supabase/migrations/202610230001_create_project_todos.sql`을 실행합니다. 테이블명에는 앱 프로젝트명 `03_todo_naver`를 접두사로 사용하므로 기존 `todos`, `apple_todos`와 구분됩니다.
 3. `.env.example`을 `.env.local`로 복사하고 `SUPABASE_URL`과 `SUPABASE_SECRET_KEY`를 설정합니다. 기존 `service_role` 키는 `SUPABASE_SERVICE_ROLE_KEY` 변수로도 사용할 수 있습니다.
 4. `npm run db:import`로 기존 파일 데이터를 이전합니다. 원본은 보존하고 `data/backups/`에 추가 백업합니다. UUID를 그대로 사용하며 재실행해도 기존 Supabase 데이터를 덮어쓰지 않습니다.
 5. 실행 중인 서버를 재시작합니다. 앱에서 새 글을 등록하고 Supabase Table Editor의 `03_todo_naver_todos`에서 확인합니다.
 
-서버 전용 키는 `.env.local`에만 저장하며 브라우저로 전달하지 않습니다. 테이블은 RLS를 활성화하고 `anon`과 `authenticated`의 직접 접근을 차단합니다. 이 앱은 로그인 없는 개인용 로컬 앱이므로 외부에 공개하려면 별도의 사용자 인증과 권한 설계가 필요합니다.
+서버 전용 키는 로컬의 `.env.local`과 Vercel의 비밀 환경 변수에 저장하며 브라우저로 전달하지 않습니다. 테이블은 RLS를 활성화하고 `anon`과 `authenticated`의 직접 접근을 차단합니다. 웹 API를 통해 접근하며, 현재 배포 앱은 로그인 없이 방문자가 같은 할 일 목록을 사용하는 공용 게시판입니다.
 
-프로젝트 생성, SQL 적용, 환경 변수 설정이 실제로 끝나야 데이터베이스 연결이 완료됩니다. 코드와 SQL 파일만으로 원격 프로젝트가 자동 생성되지는 않습니다.
+할 일 12개를 원본 UUID와 모든 필드를 유지한 채 `todo` 프로젝트의 `03_todo_naver_todos` 테이블로 이전했습니다. 이전 전 백업과 원본 파일은 로컬 `data/` 폴더에 보존됩니다. 기존 `todos`, `apple_todos` 테이블은 수정하지 않았습니다.
 
-개인용 로컬 앱이므로 로그인 기능은 없습니다. 서버는 `127.0.0.1`로 실행됩니다. 데이터 백업은 `data/todos.json`을 복사하면 됩니다. 처음 상태로 초기화하려면 서버를 종료한 후 해당 파일을 별도로 백업하고 삭제하세요.
+로컬 서버는 `127.0.0.1`로 실행됩니다. Supabase 연결 상태에서는 로컬 JSON 파일을 지워도 원격 데이터에 영향을 주지 않습니다. `data/todos.json`은 이전 당시 원본이며, 이후 Supabase 변경 사항이 자동으로 이 파일에 복사되지는 않습니다.
 
 글꼴은 Google Fonts의 Noto Sans KR을 사용하며, 인터넷이 없으면 시스템 글꼴로 표시됩니다.
 
