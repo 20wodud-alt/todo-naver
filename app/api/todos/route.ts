@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { withTodos } from '@/lib/store';
+import { createTodo, deleteTodos, listTodos, StorageError, updateTodo } from '@/lib/todo-repository';
 import { categories, type Todo } from '@/lib/types';
 import sanitizeHtml from 'sanitize-html';
 
@@ -45,38 +45,31 @@ function validate(body: Record<string, unknown>, partial = false) {
 }
 
 export async function GET() {
-  try { return Response.json(await withTodos(todos => todos)); }
-  catch { return Response.json({ error: '할 일을 불러오지 못했습니다.' }, { status: 500 }); }
+  try { return Response.json(await listTodos()); }
+  catch (error) { return Response.json({ error: error instanceof StorageError ? error.message : '할 일을 불러오지 못했습니다.' }, { status: 503 }); }
 }
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const values = validate(body);
     const todo = { completed: false, pinned: false, ...values, id: randomUUID(), createdAt: new Date().toISOString() } as Todo;
-    await withTodos(todos => { todos.unshift(todo); }, true);
-    return Response.json(todo, { status: 201 });
-  } catch (error) { return Response.json({ error: error instanceof Error ? error.message : '저장에 실패했습니다.' }, { status: 400 }); }
+    return Response.json(await createTodo(todo), { status: 201 });
+  } catch (error) { return Response.json({ error: error instanceof Error ? error.message : '저장에 실패했습니다.' }, { status: error instanceof StorageError ? 503 : 400 }); }
 }
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
     const values = validate(body, true);
-    const result = await withTodos(todos => {
-      const todo = todos.find(t => t.id === body.id);
-      if (!todo) return null;
-      Object.assign(todo, values);
-      return todo;
-    }, true);
+    if (typeof body.id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.id)) throw new Error('올바른 할 일을 선택해 주세요.');
+    const result = await updateTodo(body.id, values);
     return result ? Response.json(result) : Response.json({ error: '할 일을 찾을 수 없습니다.' }, { status: 404 });
-  } catch (error) { return Response.json({ error: error instanceof Error ? error.message : '수정에 실패했습니다.' }, { status: 400 }); }
+  } catch (error) { return Response.json({ error: error instanceof Error ? error.message : '수정에 실패했습니다.' }, { status: error instanceof StorageError ? 503 : 400 }); }
 }
 export async function DELETE(request: Request) {
   try {
     const body = await request.json();
-    if (!Array.isArray(body.ids) || !body.ids.length || !body.ids.every((id: unknown) => typeof id === 'string')) return Response.json({ error: '삭제할 할 일을 선택해 주세요.' }, { status: 400 });
-    await withTodos(todos => {
-      for (let i = todos.length - 1; i >= 0; i--) if (body.ids.includes(todos[i].id)) todos.splice(i, 1);
-    }, true);
+    if (!Array.isArray(body.ids) || !body.ids.length || !body.ids.every((id: unknown) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) return Response.json({ error: '삭제할 할 일을 선택해 주세요.' }, { status: 400 });
+    await deleteTodos(body.ids);
     return Response.json({ success: true });
-  } catch { return Response.json({ error: '삭제하지 못했습니다.' }, { status: 500 }); }
+  } catch (error) { return Response.json({ error: error instanceof StorageError ? error.message : '삭제하지 못했습니다.' }, { status: 503 }); }
 }
