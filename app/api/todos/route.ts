@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { withTodos } from '@/lib/store';
 import { categories, type Todo } from '@/lib/types';
+import sanitizeHtml from 'sanitize-html';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,15 @@ function validate(body: Record<string, unknown>, partial = false) {
     if (typeof body.description !== 'string' || body.description.length > 5000) throw new Error('메모는 5,000자 이내로 입력해 주세요.');
     output.description = body.description;
   }
+  if ('descriptionHtml' in body) {
+    if (typeof body.descriptionHtml !== 'string' || body.descriptionHtml.length > 40000) throw new Error('본문이 너무 깁니다. 내용을 줄여 주세요.');
+    output.descriptionHtml = sanitizeHtml(body.descriptionHtml, {
+      allowedTags: ['p', 'div', 'br', 'b', 'strong', 'i', 'em', 'u', 's', 'strike', 'span', 'font', 'h2', 'h3', 'blockquote', 'ul', 'ol', 'li', 'hr', 'a', 'table', 'tbody', 'tr', 'td', 'th'],
+      allowedAttributes: { '*': ['style'], a: ['href'], font: ['size', 'face', 'color'] },
+      allowedStyles: { '*': { 'text-align': [/^(left|center|right)$/], 'font-weight': [/^(bold|[1-9]00)$/], 'font-style': [/^italic$/], 'text-decoration': [/^(underline|line-through)$/], 'color': [/^#[0-9a-f]{3,6}$/i], 'font-size': [/^\d{1,2}px$/], 'font-family': [/^(Arial|Georgia|sans-serif|serif)$/] } },
+      allowedSchemes: ['https', 'http', 'mailto'], allowProtocolRelative: false,
+    });
+  } else if ('description' in body) output.descriptionHtml = '';
   if (!partial || 'category' in body) {
     if (!categories.includes(body.category as Todo['category'])) throw new Error('분류를 선택해 주세요.');
     output.category = body.category as Todo['category'];

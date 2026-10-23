@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUpRight, BookOpen, BriefcaseBusiness, CalendarDays, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Coffee, FileText, Flag, Flower2, FolderOpen, LayoutList, Leaf, ListTodo, LoaderCircle, Menu, Pencil, Pin, Plus, Search, Sparkles, Star, Sun, Trash2, UserRound, X } from 'lucide-react';
 import { categories, type Category, type Todo } from '@/lib/types';
+import CafeEditor, { type EditorForm } from './cafe-editor';
 
 const categoryIcons = { 업무: BriefcaseBusiness, 개인: UserRound, 공부: BookOpen, 일상: Coffee };
 type View = 'all' | 'today' | 'important' | 'completed' | Category;
 const viewNames: Record<View, string> = { all: '전체 할 일', today: '오늘의 할 일', important: '중요한 할 일', completed: '완료한 할 일', 업무: '업무', 개인: '개인', 공부: '공부', 일상: '일상' };
-const blank = { title: '', description: '', category: '업무' as Category, priority: '보통' as Todo['priority'], dueDate: '', pinned: false };
+const blank = { title: '', description: '', descriptionHtml: '', category: '업무' as Category, priority: '보통' as Todo['priority'], dueDate: '', pinned: false };
 function localDate() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); }
 
 export default function TodoCafe() {
@@ -21,7 +22,7 @@ export default function TodoCafe() {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string[]>([]);
   const [modal, setModal] = useState<'create' | Todo | null>(null);
-  const [form, setForm] = useState(blank);
+  const [form, setForm] = useState<EditorForm>(blank);
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
   const [deleteIds, setDeleteIds] = useState<string[] | null>(null);
@@ -34,7 +35,7 @@ export default function TodoCafe() {
 
   useEffect(() => { setToday(localDate()); void load(); }, []);
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(''), 3200); return () => clearTimeout(timer); }, [toast]);
-  useEffect(() => { if (modal) modalRef.current?.showModal(); else modalRef.current?.close(); }, [modal]);
+  useEffect(() => { if (modal) { modalRef.current?.showModal(); document.body.style.overflow = 'hidden'; } else { modalRef.current?.close(); document.body.style.overflow = ''; } return () => { document.body.style.overflow = ''; }; }, [modal]);
   useEffect(() => { if (deleteIds) confirmationRef.current?.showModal(); else confirmationRef.current?.close(); }, [deleteIds]);
   useEffect(() => { if (help) helpRef.current?.showModal(); else helpRef.current?.close(); }, [help]);
   useEffect(() => { setPage(1); setSelected([]); }, [view, query, status]);
@@ -56,12 +57,13 @@ export default function TodoCafe() {
     try { const updated = await api('PATCH', { id: todo.id, ...changes }); setTodos(items => items.map(t => t.id === updated.id ? updated : t)); if ('completed' in changes) setToast(changes.completed ? '한 걸음 더 해냈어요! 완료한 일에 담았어요.' : '다시 진행 중인 할 일로 변경했어요.'); }
     catch (e) { setToast((e as Error).message); } finally { setBusy(false); }
   }
-  function openEditor(todo?: Todo) { setError(''); setForm(todo ? { title: todo.title, description: todo.description, category: todo.category, priority: todo.priority, dueDate: todo.dueDate, pinned: todo.pinned } : { ...blank, dueDate: today, category: categories.includes(view as Category) ? view as Category : '업무' }); setModal(todo || 'create'); }
+  function openEditor(todo?: Todo) { setError(''); setForm(todo ? { title: todo.title, description: todo.description, descriptionHtml: todo.descriptionHtml || '', category: todo.category, priority: todo.priority, dueDate: todo.dueDate, pinned: todo.pinned } : { ...blank, dueDate: today, category: categories.includes(view as Category) ? view as Category : '업무' }); setModal(todo || 'create'); }
   async function save(event: React.FormEvent) {
     event.preventDefault(); setBusy(true); setError('');
     try {
       const result: Todo = await api(modal === 'create' ? 'POST' : 'PATCH', { ...form, ...(modal && modal !== 'create' ? { id: modal.id } : {}) });
       setTodos(items => modal === 'create' ? [result, ...items] : items.map(t => t.id === result.id ? result : t));
+      try { localStorage.removeItem(`one-step-cafe:draft:${modal && modal !== 'create' ? modal.id : 'new'}`); } catch {}
       setModal(null); setToast(modal === 'create' ? '새로운 할 일을 등록했어요.' : '할 일을 수정했어요.');
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
@@ -97,14 +99,14 @@ export default function TodoCafe() {
   ];
 
   return <>
-    <header className="global-header"><div className="global-inner"><a className="brand" href="/">NAVER <span>카페</span></a><div className="global-links"><span>나만의 작은 실천 공간</span><i /><button onClick={() => setHelp(true)}>이용안내 <CircleHelp size={13} /></button><span className="user-dot">나</span><span className="user-name">나의 카페 <ChevronDown size={12} /></span></div></div></header>
+    <header className="global-header"><div className="global-inner"><a className="brand" href="/">열매담 <span>카페</span></a><div className="global-links"><span>나만의 작은 실천 공간</span><i /><button onClick={() => setHelp(true)}>이용안내 <CircleHelp size={13} /></button><span className="user-dot">나</span><span className="user-name">나의 카페 <ChevronDown size={12} /></span></div></div></header>
     <div className="site-wrap">
       <section className="hero"><div className="hero-dots"/><div className="hero-copy"><span className="eyebrow">MY DAILY ROUTINE, MY LITTLE MIRACLE</span><h1>하루 한 걸음<span className="hero-period">.</span></h1><p>작은 실천이 모여, 더 나은 나를 만듭니다.</p><div className="hero-tags"><span>나만의 투두 카페</span><i />매일 조금씩, 꾸준하게</div></div><div className="hero-art" aria-hidden="true"><div className="orbit orbit-one"/><div className="orbit orbit-two"/><span className="art-star">✦</span><div className="check-medallion"><Check size={67} strokeWidth={1.8}/></div><span className="art-spark">✧</span><span className="art-caption">ONE STEP AT A TIME</span></div></section>
       <div className="mobile-bar"><button onClick={() => setMobileMenu(!mobileMenu)}><Menu size={18}/> 게시판 메뉴</button><span>오늘도 한 걸음 🌱</span></div>
       <div className="layout">
         <aside className={mobileMenu ? 'sidebar mobile-open' : 'sidebar'}>
           <div className="sidebar-tabs"><span>카페정보</span><span>나의활동</span></div>
-          <div className="cafe-profile"><div className="cafe-avatar"><Leaf size={26}/><span>ONE STEP</span></div><div><strong>하루 한 걸음</strong><span className="manager-badge">매니저</span><p>나를 위한 작은 기록</p><small>2026. 10. 23. 개설</small></div></div>
+          <div className="cafe-profile"><div className="cafe-avatar"><Leaf size={26}/><span>ONE STEP</span></div><div><strong>하루</strong><span className="manager-badge">매니저</span><p>나를 위한 작은 기록</p><small>2026. 10. 23. 개설</small></div></div>
           <div className="cafe-details"><span><Leaf size={13}/> 새싹 멤버</span><span>나의 개인 카페</span></div>
           <button className="primary new-todo" onClick={() => openEditor()}><Pencil size={15}/> 할 일 쓰기</button>
           <div className="nav-heading"><Star size={13} fill="currentColor"/> 나의 할 일 게시판</div>
@@ -116,7 +118,7 @@ export default function TodoCafe() {
         </aside>
         <main>
           <div className="breadcrumb">나의 카페 <ChevronRight size={12}/> 할 일 게시판 <ChevronRight size={12}/><span>{viewNames[view]}</span></div>
-          <section className="welcome"><div><span className="section-kicker"><span className="green-dot"/> TODAY’S LITTLE MIRACLE</span><h2>좋은 하루예요, 오늘도 한 걸음 <span>🌿</span></h2><p>해야 할 일은 가볍게 적고, 해낸 일은 기분 좋게 체크해요.</p></div><div className="today-date"><CalendarDays size={15}/>{dateLabel}</div></section>
+          <section className="welcome"><div><span className="section-kicker"><span className="green-dot"/> TODAY’S LITTLE MIRACLE</span><h2>열매담 상세페이지</h2><p>해야 할 일은 가볍게 적고, 해낸 일은 기분 좋게 체크해요.</p></div><div className="today-date"><CalendarDays size={15}/>{dateLabel}</div></section>
           <section className="daily-summary" aria-label="할 일 요약"><div className="summary-cell"><span><ListTodo size={15}/> 오늘의 할 일</span><strong>{todayTasks.length}<small>개</small></strong></div><div className="summary-cell"><span><CheckCheck size={15}/> 완료한 할 일</span><strong className="green-text">{todayCompleted}<small>개</small></strong></div><div className="summary-cell"><span><Flag size={14}/> 남은 할 일</span><strong>{todayTasks.length - todayCompleted}<small>개</small></strong></div><div className="summary-progress"><div><span>오늘의 달성률</span><strong>{progress}<small>%</small></strong></div><div className="progress-track"><div style={{ width: `${progress}%` }}/></div><p>{progress === 100 ? '오늘의 할 일을 모두 해냈어요. 멋져요! 🎉' : '차근차근, 잘하고 있어요!'}<Sparkles size={12}/></p></div></section>
           <div className="notice"><span className="notice-badge">공지</span><p>작은 성취도 소중하게. 완료 버튼을 눌러 오늘의 한 걸음을 기록해 보세요.</p><Leaf size={14}/></div>
           <section className="board">
@@ -135,7 +137,7 @@ export default function TodoCafe() {
       </div>
       <footer><div className="footer-brand">하루 한 걸음<span>투두 카페</span></div><p>오늘의 나를 기록하고, 내일의 나를 응원하는 공간.</p><span>© 2026 ONE STEP CAFE</span></footer>
     </div>
-    <dialog ref={modalRef} className="editor-dialog" onCancel={() => { setModal(null); setError(''); }} onClick={e => { if (e.target === e.currentTarget && !busy) setModal(null); }}><form onSubmit={save}><div className="modal-heading"><div><span className="section-kicker">ONE STEP AT A TIME</span><h2>{modal === 'create' ? '새로운 한 걸음 기록하기' : '나의 할 일'}</h2></div><button type="button" aria-label="닫기" className="icon-button" onClick={() => setModal(null)}><X size={20}/></button></div><label className="form-label">할 일 <span>*</span><input autoFocus required maxLength={120} placeholder="어떤 작은 실천을 해볼까요?" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}/></label><div className="form-grid"><label className="form-label">카테고리<select value={form.category} onChange={e => setForm({ ...form, category: e.target.value as Category })}>{categories.map(c => <option key={c}>{c}</option>)}</select></label><label className="form-label">중요도<select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value as Todo['priority'] })}>{['높음', '보통', '낮음'].map(p => <option key={p}>{p}</option>)}</select></label></div><label className="form-label">마감일<input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })}/></label><label className="form-label">메모<textarea rows={4} maxLength={5000} placeholder="필요한 내용이나 작은 계획을 남겨보세요." value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}/></label><label className="pin-check"><input type="checkbox" checked={form.pinned} onChange={e => setForm({ ...form, pinned: e.target.checked })}/><Pin size={13}/> 게시판 상단에 고정하기</label>{error && <p className="form-error" role="alert">{error}</p>}<div className="modal-footer">{modal && modal !== 'create' && <button type="button" className="delete-link" disabled={busy} onClick={() => setDeleteIds([modal.id])}><Trash2 size={15}/>삭제</button>}<div><button type="button" className="secondary" onClick={() => setModal(null)}>취소</button><button className="primary" disabled={busy}>{busy ? <LoaderCircle size={15} className="spin"/> : <Check size={15}/>} {modal === 'create' ? '할 일 등록' : '수정 저장'}</button></div></div></form></dialog>
+    <dialog ref={modalRef} className="editor-dialog cafe-editor-dialog" aria-label="Cafe editor" onCancel={event => { if (busy) event.preventDefault(); else { setModal(null); setError(''); } }}>{modal && <CafeEditor key={modal === 'create' ? 'new' : modal.id} form={form} setForm={setForm} editingId={modal === 'create' ? undefined : modal.id} busy={busy} error={error} onSubmit={save} onClose={() => { if (!busy) { setModal(null); setError(''); } }} onDelete={() => { if (modal !== 'create') setDeleteIds([modal.id]); }}/>}</dialog>
     <dialog ref={confirmationRef} className="confirm-dialog" onCancel={() => setDeleteIds(null)}><Trash2 size={27} className="delete-icon"/><h2>선택한 할 일을 삭제할까요?</h2><p>{deleteIds?.length}개의 할 일이 삭제돼요. 삭제 후에는 되돌릴 수 없어요.</p><div className="confirm-buttons"><button className="secondary" onClick={() => setDeleteIds(null)}>취소</button><button className="danger-button" disabled={busy} onClick={remove}>{busy ? '삭제 중…' : '삭제하기'}</button></div></dialog>
     <dialog ref={helpRef} className="help-dialog" onCancel={() => setHelp(false)}><div className="modal-heading"><h2>투두 카페 이용안내 🌱</h2><button className="icon-button" aria-label="닫기" onClick={() => setHelp(false)}><X size={20}/></button></div><p><b>1. 작은 한 걸음 적기</b><br/>‘할 일 쓰기’에서 제목, 분류, 마감일과 메모를 기록해요.</p><p><b>2. 오늘의 실천 확인하기</b><br/>왼쪽 게시판으로 분류하고, 검색과 정렬로 필요한 일을 찾아요. 별을 누르면 목록 상단에 고정돼요.</p><p><b>3. 해낸 일 체크하기</b><br/>‘진행 중’을 누르면 완료돼요. 제목을 누르면 수정하거나 삭제할 수 있어요.</p><div className="help-note">할 일은 이 컴퓨터의 data/todos.json 파일에 저장돼요. 처음 실행할 때는 사용법을 살펴볼 수 있는 예시 할 일이 준비되어 있어요.</div><button className="primary" onClick={() => setHelp(false)}>한 걸음 시작하기 <ArrowUpRight size={15}/></button></dialog>
     {toast && <div className="toast" role="status"><Check size={16}/>{toast}<button aria-label="알림 닫기" onClick={() => setToast('')}><X size={14}/></button></div>}
